@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>作詞アシスト・スタジオ | Lyric Writer Studio</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & Noto Sans JP -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter"', '"Noto Sans JP"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              cyan: '#06b6d4',
+              indigo: '#6366f1',
+              dark: '#090d16',
+              panel: '#111827',
+              card: '#161f33'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #090d16;
+      color: #f1f5f9;
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+      overflow-x: hidden;
+    }
+    /* カスタムスクロールバー */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #06b6d4;
+    }
+    .glass-panel {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(56, 189, 248, 0.18);
+    }
+    .active-block-ring {
+      box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.7), 0 10px 25px -5px rgba(6, 182, 212, 0.15);
+      border-color: rgba(6, 182, 212, 0.8);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-cyan-500 selection:text-slate-950">
+
+  <!-- トースト通知エリア（alert()不使用） -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ヘッダー -->
+  <header class="sticky top-0 z-40 glass-panel border-b border-slate-800/80 px-4 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-300 via-sky-200 to-indigo-300 bg-clip-text text-transparent">
+              作詞アシスト・スタジオ
+            </h1>
+            <button onclick="toggleChangelogModal()" title="更新履歴（リリースノート）を見る"
+              class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/15 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 transition cursor-pointer flex items-center gap-1 shadow-sm">
+              <span>🆕 v1.1 更新履歴</span>
+            </button>
+          </div>
+          <p class="text-xs text-slate-400 hidden sm:block">音数（モーラ）シンクロ × 韻・フレーズ引き出し × Suno/Udio連携</p>
+        </div>
+      </div>
+
+      <!-- ヘッダーアクションボタン -->
+      <div class="flex items-center gap-2">
+        <button onclick="saveCurrentSong()" class="px-3 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs sm:text-sm font-bold transition flex items-center gap-1.5">
+          <span>💾</span><span>保存ストック</span>
+        </button>
+        <button onclick="toggleStockModal()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs sm:text-sm font-semibold transition flex items-center gap-1.5">
+          <span>📂</span><span>保存一覧 (<span id="saved-count">0</span>)</span>
+        </button>
+        <button onclick="createNewSong()" class="px-3 py-2 rounded-xl bg-slate-800/70 hover:bg-slate-700 text-slate-300 border border-slate-700/70 text-xs sm:text-sm font-medium transition">
+          ＋ 新規
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- スマホ用ナビゲーションタブ（lg未満で表示） -->
+  <div class="lg:hidden sticky top-[65px] z-30 bg-slate-900/95 border-b border-slate-800 px-3 py-2 flex gap-2">
+    <button id="mobile-tab-editor" onclick="switchMobileView('editor')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow">
+      ✍️ 歌詞エディタ
+    </button>
+    <button id="mobile-tab-tools" onclick="switchMobileView('tools')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">
+      💡 韻・フレーズ引き出し
+    </button>
+    <button id="mobile-tab-export" onclick="switchMobileView('export')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">
+      🎵 AI連携・出力
+    </button>
+  </div>
+
+  <!-- メインコンテンツ -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- 左〜中央カラム：テーマ設定 ＆ 歌詞ブロックエディタ（7カラム） -->
+    <section id="section-editor" class="lg:col-span-7 flex flex-col gap-5">
+
+      <!-- ① 曲のテーマ・ムード・構成テンプレート設計 -->
+      <div class="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 sm:p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-cyan-300 flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-cyan-500/20 flex items-center justify-center text-xs">1</span>
+            曲のテーマ・ムード＆構成設計
+          </h2>
+          <span id="total-stats-badge" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
+            総ブロック: 0 / 総音数: 0音
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">曲タイトル（仮題OK）</label>
+            <input id="song-title" type="text" placeholder="例：Midnight Neon / 境界線の向こう側" oninput="handleMetaChange()"
+              class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700/80 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 text-sm text-white placeholder-slate-500 outline-none transition">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">テーマ・世界観キーワード</label>
+            <input id="song-theme" type="text" placeholder="例：雨上がりの高速道路、戻れない過去、再起" oninput="handleMetaChange()"
+              class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700/80 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 text-sm text-white placeholder-slate-500 outline-none transition">
+          </div>
+        </div>
+
+        <!-- ジャンル／ムード選択 -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-slate-400 mb-2">ジャンル / ムード選択（フレーズガチャ＆AIプロンプト連動）</label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="mood-buttons">
+            <button type="button" data-mood="emo" onclick="selectMood('emo')"
+              class="mood-btn p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 bg-cyan-500/15 border-cyan-400 text-white">
+              <span class="text-xs font-bold">👑 王道エモい</span>
+              <span class="text-[11px] text-cyan-200/80">切ない・ドラマチック</span>
+            </button>
+            <button type="button" data-mood="dark" onclick="selectMood('dark')"
+              class="mood-btn p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600">
+              <span class="text-xs font-bold">🌑 ダーク・幻想</span>
+              <span class="text-[11px] text-slate-500">重厚・退廃・シリアス</span>
+            </button>
+            <button type="button" data-mood="youth" onclick="selectMood('youth')"
+              class="mood-btn p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600">
+              <span class="text-xs font-bold">☀️ 疾走・青春</span>
+              <span class="text-[11px] text-slate-500">前向き・ロック・爽快</span>
+            </button>
+            <button type="button" data-mood="lofi" onclick="selectMood('lofi')"
+              class="mood-btn p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600">
+              <span class="text-xs font-bold">☕ 夜カフェ・Lo-Fi</span>
+              <span class="text-[11px] text-slate-500">チル・都会的・メロウ</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ワンタップ構成テンプレート ＆ 一括目標音数 -->
+        <div class="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-xs font-semibold text-slate-400 mr-1">構成テンプレ:</span>
+            <button onclick="applyTemplate('jpop')" class="px-2.5 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition">
+              J-POP王道
+            </button>
+            <button onclick="applyTemplate('short')" class="px-2.5 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition">
+              SNSショート向け
+            </button>
+            <button onclick="applyTemplate('ballad')" class="px-2.5 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition">
+              バラード構成
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400">全行目標音数:</span>
+            <select id="global-target-mora" onchange="applyGlobalTargetMora(this.value)"
+              class="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-cyan-300 font-bold outline-none">
+              <option value="">個別設定</option>
+              <option value="6">6音に統一</option>
+              <option value="7">7音に統一</option>
+              <option value="8">8音に統一（定番）</option>
+              <option value="9">9音に統一</option>
+              <option value="10">10音に統一</option>
+              <option value="12">12音に統一</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ② リアルタイム文字数・音数（モーラ）カウンター付き歌詞エディタ -->
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-bold text-cyan-300 flex items-center gap-2">
+          <span class="w-6 h-6 rounded-lg bg-cyan-500/20 flex items-center justify-center text-xs">2</span>
+          歌詞ブロックエディタ（リアルタイム音数シンクロ）
+        </h2>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] text-slate-400 hidden sm:inline">※「ゃゅょっ」小書き文字は音数カウント自動補正</span>
+        </div>
+      </div>
+
+      <!-- ブロック一覧コンテナ -->
+      <div id="blocks-container" class="flex flex-col gap-4">
+        <!-- JSで動的に描画 -->
+      </div>
+
+      <!-- 新規ブロック追加バー -->
+      <div class="rounded-2xl bg-slate-900/60 border border-dashed border-slate-700 p-3.5 flex flex-wrap items-center justify-between gap-2">
+        <span class="text-xs font-semibold text-slate-400">＋ セクションブロックを追加:</span>
+        <div class="flex flex-wrap gap-1.5">
+          <button onclick="addBlock('イントロ')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 text-xs font-medium border border-slate-700 transition">[イントロ]</button>
+          <button onclick="addBlock('Aメロ')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 text-xs font-medium border border-slate-700 transition">[Aメロ]</button>
+          <button onclick="addBlock('Bメロ')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 text-xs font-medium border border-slate-700 transition">[Bメロ]</button>
+          <button onclick="addBlock('サビ')" class="px-2.5 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-bold border border-cyan-500/40 transition">[サビ]</button>
+          <button onclick="addBlock('Cメロ')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 text-xs font-medium border border-slate-700 transition">[Cメロ]</button>
+          <button onclick="addBlock('大サビ')" class="px-2.5 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-xs font-bold border border-indigo-500/40 transition">[大サビ]</button>
+          <button onclick="addBlock('アウトロ')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 text-xs font-medium border border-slate-700 transition">[アウトロ]</button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 右カラム：作詞アイデア引き出しツール ＆ AI連携出力（5カラム） -->
+    <aside class="lg:col-span-5 flex flex-col gap-5">
+
+      <!-- ③ 作詞アイデア引き出しツール -->
+      <div id="section-tools" class="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 sm:p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-indigo-300 flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-indigo-500/20 flex items-center justify-center text-xs">3</span>
+            作詞アイデア引き出しツール
+          </h2>
+          <span id="active-target-indicator" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+            挿入先: 選択中の行
+          </span>
+        </div>
+
+        <!-- 引き出しツール切替タブ -->
+        <div class="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-slate-950 border border-slate-800 mb-4">
+          <button id="tool-tab-rhyme" onclick="switchToolTab('rhyme')" class="py-2 rounded-lg text-xs font-bold bg-indigo-600 text-white transition">
+            🎤 韻・同義語
+          </button>
+          <button id="tool-tab-gacha" onclick="switchToolTab('gacha')" class="py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">
+            ✨ 情景ガチャ
+          </button>
+          <button id="tool-tab-mora" onclick="switchToolTab('mora')" class="py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">
+            📏 音数ヒント
+          </button>
+        </div>
+
+        <!-- タブ①：韻踏み（ライム）＆語尾バリエーション辞典 -->
+        <div id="tool-panel-rhyme" class="flex flex-col gap-3">
+          <div>
+            <span class="text-[11px] font-semibold text-slate-400 block mb-1.5">母音（あ・い・う・え・お）で韻を踏む:</span>
+            <div class="flex gap-1.5" id="vowel-buttons">
+              <button onclick="selectVowel('a')" data-vowel="a" class="vowel-btn flex-1 py-1.5 rounded-lg text-xs font-extrabold bg-cyan-500 text-slate-950">あ段 (A)</button>
+              <button onclick="selectVowel('i')" data-vowel="i" class="vowel-btn flex-1 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">い段 (I)</button>
+              <button onclick="selectVowel('u')" data-vowel="u" class="vowel-btn flex-1 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">う段 (U)</button>
+              <button onclick="selectVowel('e')" data-vowel="e" class="vowel-btn flex-1 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">え段 (E)</button>
+              <button onclick="selectVowel('o')" data-vowel="o" class="vowel-btn flex-1 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">お段 (O)</button>
+            </div>
+          </div>
+
+          <div id="vowel-words-grid" class="flex flex-wrap gap-1.5 p-3 rounded-xl bg-slate-950/90 border border-slate-800/80 min-h-[84px]">
+            <!-- JSで母音ワード描画 -->
+          </div>
+
+          <div class="pt-2 border-t border-slate-800">
+            <span class="text-[11px] font-semibold text-slate-400 block mb-1.5">定番エモワード・言い換えパレット（タップで挿入）:</span>
+            <div class="flex flex-wrap gap-1.5 mb-2" id="keyword-category-btns">
+              <!-- JSでテーマワードカテゴリ描画 -->
+            </div>
+            <div id="keyword-synonyms-box" class="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-slate-950/90 border border-slate-800/80">
+              <!-- JSで同義語描画 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- タブ②：感情・情景フレーズガチャ -->
+        <div id="tool-panel-gacha" class="hidden flex-col gap-3">
+          <div class="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <div>
+              <span class="text-[11px] text-slate-400 block">現在のムードに最適化中:</span>
+              <span id="gacha-mood-label" class="text-xs font-bold text-cyan-300">👑 王道エモい・切ない</span>
+            </div>
+            <button onclick="shuffleGachaPhrases()" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white text-xs font-extrabold shadow-lg shadow-cyan-500/20 transition flex items-center gap-1.5">
+              <span>🎲</span><span>フレーズをシャッフル</span>
+            </button>
+          </div>
+
+          <div id="gacha-results" class="flex flex-col gap-2">
+            <!-- JSで情景・感情・比喩カード描画 -->
+          </div>
+        </div>
+
+        <!-- タブ③：リズム（音数）別・言い換えヒント -->
+        <div id="tool-panel-mora" class="hidden flex-col gap-3">
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs text-slate-400">音数指定:</span>
+            <button onclick="selectMoraHint(4)" data-mora="4" class="mora-hint-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-500 text-slate-950">4音</button>
+            <button onclick="selectMoraHint(5)" data-mora="5" class="mora-hint-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300">5音</button>
+            <button onclick="selectMoraHint(7)" data-mora="7" class="mora-hint-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300">7音</button>
+            <button onclick="selectMoraHint(8)" data-mora="8" class="mora-hint-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300">8音</button>
+          </div>
+          <p class="text-[11px] text-slate-400">メロディの隙間を埋める「リズムぴったりフレーズ」をタップで即挿入できます。</p>
+          <div id="mora-phrases-box" class="flex flex-wrap gap-1.5 p-3 rounded-xl bg-slate-950 border border-slate-800">
+            <!-- JSで音数別フレーズ描画 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ④ Suno / Udio AI音楽生成連携プロンプト自動生成＆書き出し -->
+      <div id="section-export" class="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 sm:p-5 shadow-xl flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold text-cyan-300 flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-cyan-500/20 flex items-center justify-center text-xs">4</span>
+            Suno / Udio AI音楽生成 ＆ 書き出し
+          </h2>
+          <label class="flex items-center gap-1.5 cursor-pointer select-none">
+            <input id="auto-english-tags" type="checkbox" checked onchange="updateExportPreview()" class="rounded bg-slate-950 border-slate-700 text-cyan-500 focus:ring-0">
+            <span class="text-xs font-semibold text-slate-300">[Verse]英語タグ変換</span>
+          </label>
+        </div>
+
+        <!-- スタイルプロンプト表示 -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[11px] font-semibold text-slate-400">Suno / Udio Style Prompt（自動生成）:</span>
+            <button onclick="copyStylePrompt()" class="text-[11px] font-bold text-cyan-400 hover:text-cyan-300">📋 スタイルのみコピー</button>
+          </div>
+          <div id="style-prompt-display" class="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-indigo-300 break-words">
+            J-Pop, Emotional Piano Rock, Dramatic Strings, Male/Female Vocal, 128 BPM
+          </div>
+        </div>
+
+        <!-- 結合プレビュー -->
+        <div>
+          <span class="text-[11px] font-semibold text-slate-400 block mb-1">出力プレビュー（AI貼り付け＆テキスト保存用）:</span>
+          <textarea id="export-preview-text" readonly rows="7"
+            class="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300 leading-relaxed outline-none resize-y"></textarea>
+        </div>
+
+        <!-- 書き出しアクションボタン群 -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+          <button onclick="copySunoFull()" class="sm:col-span-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white text-xs sm:text-sm font-extrabold shadow-lg shadow-cyan-500/20 transition flex items-center justify-center gap-1.5">
+            <span>🚀</span><span>Suno / Udio用 歌詞一括コピー</span>
+          </button>
+          <button onclick="downloadTxtFile()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5">
+            <span>📄</span><span>.TXT保存</span>
+          </button>
+        </div>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- 保存ストック一覧モーダル -->
+  <div id="stock-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-xl w-full p-5 shadow-2xl flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span>📂</span><span>保存済みの作詞ストック一覧</span>
+        </h3>
+        <button onclick="toggleStockModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+      </div>
+      <div id="stock-list-container" class="flex-1 overflow-y-auto py-3 flex flex-col gap-2.5">
+        <!-- JSで保存済み曲リスト描画 -->
+      </div>
+      <div class="pt-3 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400">
+        <span>※データはお使いのブラウザ内（LocalStorage）に保存されます</span>
+        <button onclick="toggleStockModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- フッター（免責事項・個人制作ツール表記） -->
+  <footer class="mt-10 border-t border-slate-800/80 bg-slate-950/70 py-5 px-4 text-center">
+    <div class="max-w-4xl mx-auto flex flex-col items-center gap-2 text-xs text-slate-400">
+      <div class="flex flex-wrap items-center justify-center gap-3">
+        <p class="font-semibold text-slate-300">作詞アシスト・スタジオ（Lyric Writer Assist Studio）</p>
+        <button onclick="toggleChangelogModal()"
+          class="px-3 py-1 rounded-lg bg-slate-900 hover:bg-cyan-500/20 text-cyan-300 border border-slate-700 hover:border-cyan-500/40 text-xs font-semibold transition flex items-center gap-1.5">
+          <span>📋</span><span>アプリの更新履歴（リリースノート）を見る (v1.1)</span>
+        </button>
+      </div>
+      <p>※本ツールはクリエイター支援のために個人制作された無料サポートツールです（Suno AI / Udio等の各サービス運営元とは関係ありません）。</p>
+      <p>※入力・保存された歌詞データはすべてご利用中のブラウザ内（LocalStorage）にのみ保持され、外部サーバーへ送信されることはありません。ブラウザのキャッシュ削除等によるデータ消失について制作者は責任を負いかねますので、大切な歌詞は「.TXT保存」にてバックアップをお取りください。</p>
+    </div>
+  </footer>
+
+  <!-- 更新履歴（リリースノート）モーダル -->
+  <div id="changelog-modal" onclick="if(event.target === this) toggleChangelogModal()"
+    class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 shadow-2xl flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-sm">📋</span>
+          <h3 class="text-base font-bold text-white">更新履歴・リリースノート</h3>
+        </div>
+        <button onclick="toggleChangelogModal()"
+          class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">✕</button>
+      </div>
+
+      <!-- タイムライン本体 -->
+      <div class="flex-1 overflow-y-auto py-4 px-1">
+        <div class="relative border-l-2 border-cyan-500/40 ml-3 pl-5 flex flex-col gap-6">
+
+          <!-- v1.1（最新） -->
+          <div class="relative">
+            <span class="absolute -left-[27px] top-1 w-3.5 h-3.5 rounded-full bg-cyan-400 ring-4 ring-slate-900 shadow-lg shadow-cyan-500/50"></span>
+            <div class="flex flex-wrap items-center gap-2 mb-1.5">
+              <span class="text-sm font-extrabold text-white">v1.1</span>
+              <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-500 text-white tracking-wider">NEW</span>
+              <span class="text-xs text-slate-400">ユーザー向け更新履歴UI搭載</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950/90 border border-cyan-500/30 text-xs text-slate-300 leading-relaxed">
+              ユーザー向け更新履歴（リリースノート）モーダル・バージョンバッジを搭載。アプリの進化履歴をいつでも画面上から確認可能になりました。
+            </div>
+          </div>
+
+          <!-- v1.0（初版公開） -->
+          <div class="relative">
+            <span class="absolute -left-[27px] top-1 w-3.5 h-3.5 rounded-full bg-slate-600 ring-4 ring-slate-900"></span>
+            <div class="flex flex-wrap items-center gap-2 mb-1.5">
+              <span class="text-sm font-bold text-slate-200">v1.0</span>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">初版公開</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-slate-400 leading-relaxed">
+              『作詞アシスト・スタジオ』初版リリース。リアルタイム音数（モーラ）シンクロ判定、母音・韻・同義語パレット＆情景フレーズガチャ、構成テンプレート、Suno / Udio用英語タグ＆Style Prompt自動出力、LocalStorage複数曲ストック機能を搭載。
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400">
+        <span>作詞アシスト・スタジオ（Current: v1.1）</span>
+        <button onclick="toggleChangelogModal()"
+          class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- アプリケーションロジック -->
+  <script>
+    // ==========================================
+    // 1. 状態管理（State）＆ 辞書データベース
+    // ==========================================
+    const STORAGE_KEY_CURRENT = 'river130_lyric_studio_current_v1';
+    const STORAGE_KEY_STOCKS  = 'river130_lyric_studio_stocks_v1';
+
+    let state = {
+      id: Date.now().toString(),
+      title: '',
+      theme: '',
+      mood: 'emo',
+      blocks: []
+    };
+
+    // 現在フォーカス中のテキストエリア情報（ワンタップ挿入用）
+    let activeTarget = {
+      blockId: null,
+      lineIndex: 0,
+      selectionStart: null,
+      selectionEnd: null
+    };
+
+    // ムード別設定（ラベル＆Suno/Udioスタイルプロンプト）
+    const MOOD_CONFIG = {
+      emo: {
+        label: '👑 王道エモい・切ない',
+        stylePrompt: 'J-Pop, Emotional Piano Rock, Dramatic Strings, Soaring Melody, 126 BPM',
+        gacha: {
+          scene: [
+            '終電過ぎのホーム、白い息が溶けていく',
+            '水たまりに映るネオンが滲んで揺れた',
+            'あの日交わした約束だけがポケットに残ってる',
+            '夜明け前の高速道路、テールランプを追いかけて'
+          ],
+          emotion: [
+            '強がりの裏側で本当はずっと震えていた',
+            'サヨナラさえ言えないまま季節だけが追い越していく',
+            '失くしてから気づくなんて遅すぎると分かっていても',
+            '何度傷ついても、まだこの手を伸ばしてしまう'
+          ],
+          metaphor: [
+            'まるで時計の針を逆さに回すみたいに',
+            '心の中の小さな灯火が消えないように',
+            'ページをめくるたび溢れ出すモノクロの記憶',
+            '錆びついた鍵穴に最後の光を差し込む'
+          ]
+        }
+      },
+      dark: {
+        label: '🌑 ダーク・幻想・重厚',
+        stylePrompt: 'Dark Fantasy Gothic Rock, Cinematic Orchestral, Deep Bass, Dramatic Choir, 135 BPM',
+        gacha: {
+          scene: {
+            0: '月さえ眠る深い霧の森、鐘の音が鳴り響く',
+            1: '崩れ落ちた玉座の上で灰色の雪が舞う',
+            2: '鏡の奥で微笑むもう一人の自分が手招きする',
+            3: '紅く染まる地平線の果て、終わらない夜の始まり'
+          },
+          emotion: [
+            '偽りの仮面を剥がせば、そこには孤独だけが残る',
+            '呪いのような宿命さえも、この手で抱きしめてやる',
+            '正義と悪の境界線が音を立てて崩れていく',
+            '絶望の淵で見上げた空は残酷なほど美しかった'
+          ],
+          metaphor: [
+            '硝子の心臓が砕け散るその瞬間まで',
+            '鎖に繋がれた翼で闇を切り裂くように',
+            '毒を含んだ甘い果実を噛み砕くように',
+            '砂時計の最後の一粒が落ちるカウントダウン'
+          ]
+        }
+      },
+      youth: {
+        label: '☀️ 疾走・青春・前向き',
+        stylePrompt: 'Upbeat J-Rock, Energetic Electric Guitar, Driving Drums, Youthful Anthem, 168 BPM',
+        gacha: {
+          scene: [
+            '向かい風を切ってペダルを踏み込んだ坂道',
+            '入道雲が湧き上がる夏のグラウンドの白線',
+            '擦り切れたスニーカーで飛び出した改札の向こう',
+            '朝焼けに染まる屋上で深呼吸した瞬間'
+          ],
+          emotion: [
+            '答えなんてまだ無くていい、ただ走りたい衝動のまま',
+            '転んだ数だけ強くなれるって本気で信じてた',
+            '誰かの物差しじゃ測れない夢を叫ぶんだ',
+            '今この瞬間は二度と戻らない僕らのステージ'
+          ],
+          metaphor: [
+            '真っ白なキャンバスに思い切り色をぶちまけて',
+            'スタートラインのピストルが鳴り響くように',
+            '雲の隙間から差し込む一筋のスポットライト',
+            'ポケットの地図を破り捨てて風になる'
+          ]
+        }
+      },
+      lofi: {
+        label: '☕ 夜カフェ・Lo-Fi・チル',
+        stylePrompt: 'Lo-Fi Hip Hop, Chill R&B, Warm Rhodes Piano, Vinyl Crackle, Smooth Vocal, 86 BPM',
+        gacha: {
+          scene: [
+            '深夜2時のコンビニ帰り、冷めた缶コーヒーの温もり',
+            '窓ガラスを叩く雨音とレコードのノイズが混ざる部屋',
+            'ヘッドホンから流れるベースラインに身を委ねて',
+            'オレンジ色の街灯がアスファルトを優しく照らす'
+          ],
+          emotion: [
+            '完璧じゃない今日という日も、まあ悪くないって思えた',
+            '誰にも言えない本音は夜風に預けてしまおう',
+            '少しだけ立ち止まって深呼吸する権利があるはず',
+            '急ぎ足の街の中で、ここだけは時間がゆっくり流れる'
+          ],
+          metaphor: [
+            '角砂糖がゆっくりとカップの底で溶けるように',
+            '読みかけの小説に栞を挟んで目を閉じる',
+            '波打ち際で揺れる月明かりをすくうように',
+            '眠れない夜に寄り添う小さなラジオの周波数'
+          ]
+        }
+      }
+    };
+
+    // 母音別ライム（韻）ワード辞典
+    const VOWEL_WORDS = {
+      a: [
+        '空 (そら)', '朝 (あさ)', '翼 (つばさ)', '涙 (なみだ)', 'サヨナラ', '彼方 (かなた)',
+        'ドラマ', '宝 (たから)', '身体 (からだ)', '言葉 (ことば)', 'まま', '鮮やかな',
+        '明日 (あした)', '扉 (とびら)', '仲間 (なかま)', '今 (いま)'
+      ],
+      i: [
+        '光 (ひかり)', '未来 (みらい)', '痛み (いたみ)', '一人 (ひとり)', '祈り (いのり)', '瞳 (ひとみ)',
+        '奇跡 (きせき)', '景色 (けしき)', '誓い (ちかい)', '時代 (じだい)', '世界 (せかい)', '願い (ねがい)',
+        '終わり (おわり)', '始まり (はじまり)', '君 (きみ)', '愛しい (いとしい)'
+      ],
+      u: [
+        '夜 (よる)', '夢 (ゆめ)', '風 (かぜ)', '嘘 (うそ)', '記憶 (きおく)', '孤独 (こどく)',
+        '約束 (やくそく)', '真実 (しんじつ)', '呼吸 (こきゅう)', '自由 (じゆう)', '理由 (りゆう)', '宇宙 (うちゅう)',
+        '季節 (きせつ)', '秘密 (ひみつ)', 'リズム', '沈む (しずむ)'
+      ],
+      e: [
+        '声 (こえ)', '夢へ (ゆめへ)', '風 (かぜ)', '影 (かげ)', '雨 (あめ)', '運命 (うんめい)',
+        '透明 (とうめい)', '証明 (しょうめい)', '共鳴 (きょうめい)', '永遠 (えいえん)', '夜明け (よあけ)', '見上げて',
+        '抱きしめて', '信じて', '果て (はて)', '名前 (なまえ)'
+      ],
+      o: [
+        '心 (こころ)', '音 (おと)', '鼓動 (こどう)', '希望 (きぼう)', '衝動 (しょうどう)', '幻想 (げんそう)',
+        '迷路 (めいろ)', '魔法 (まほう)', '昨日 (きのう)', '孤独 (こどく)', '言葉 (ことば)', '星空 (ほしぞら)',
+        '向こう (むこう)', '本当 (ほんとう)', '感情 (かんじょう)', '残像 (ざんぞう)'
+      ]
+    };
+
+    // 定番エモワード同義語パレット
+    const KEYWORD_SYNONYMS = {
+      '夜・時間': ['深夜2時', '夜明け前', '黄昏時', '真夜中', '午前0時', '刹那', '永遠', '白夜'],
+      '光・空': ['残光', '木漏れ日', '流星群', 'ネオンサイン', '月明かり', '蒼穹', '閃光', '朝焼け'],
+      '記憶・過去': ['残像', 'セピア色', 'デジャヴ', '傷跡', '足跡', '栞（しおり）', '褪せた写真', '面影'],
+      '感情・心': ['鼓動', '衝動', '葛藤', '焦燥感', '胸騒ぎ', '本音', '強がり', '微熱']
+    };
+
+    // 音数別ぴったりフレーズ
+    const MORA_PHRASES = {
+      4: ['この夜を', '君の声', '消えないで', '走り出す', '嘘でもいい', '夢の中', '今だけは', '風になる'],
+      5: ['消えない傷', '夜明けの空', '言葉よりも', '迷いながら', '光の方へ', '止まらないで', '記憶の奥', 'もう一度だけ'],
+      7: ['誰も知らない場所で', '滲む街の灯り', '交わした約束さえ', '駆け抜ける風のように', '強がりの裏側で', '明日へ続く道を'],
+      8: ['終電過ぎのホームで', '失くしたものばかりを', '心の奥で叫んだ', '夜空に溶けていくように', '信じ続けた未来へ', 'まだ終わらない物語']
+    };
+
+    // 日本語セクション名 -> Suno/Udio 英語タグ変換マップ
+    const SECTION_TO_ENGLISH = {
+      'イントロ': '[Intro]',
+      'Aメロ': '[Verse]',
+      'Bメロ': '[Pre-Chorus]',
+      'サビ': '[Chorus]',
+      'Cメロ': '[Bridge]',
+      '大サビ': '[Final Chorus]',
+      'アウトロ': '[Outro]'
+    };
+
+    // ==========================================
+    // 2. 音数（モーラ）計算エンジン
+    // ==========================================
+    /**
+     * 日本語歌詞の1行から「歌唱上の音数（モーラ数）」を概算する
+     * ・空白や記号（！？、。・〜「」()）はカウント除外
+     * ・拗音（ゃゅょぁぃぅぇぉ）は直前の文字と合わせて1音とみなすため除外
+     * ・促音（っ）や撥音（ん）、長音（ー）は1音としてカウント
+     */
+    function countMora(text) {
+      if (!text) return 0;
+      // 記号・スペースを除去
+      let cleaned = text.replace(/[\s　、。！？!?.,・〜～「」『』（）()\[\]【】\-…]/g, '');
+      // 拗音（小書きのやゆよあいうえお）を除去（っ は1音なので残す）
+      cleaned = cleaned.replace(/[ゃゅょぁぃぅぇぉャュョァィゥェォ]/g, '');
+      // 英単語が含まれる場合は文字数ベースで簡易調整
+      return cleaned.length;
+    }
+
+    // ==========================================
+    // 3. 初期化・データ永続化（LocalStorage）
+    // ==========================================
+    function initApp() {
+      const savedCurrent = localStorage.getItem(STORAGE_KEY_CURRENT);
+      if (savedCurrent) {
+        try {
+          state = JSON.parse(savedCurrent);
+        } catch (e) {
+          applyTemplate('jpop', true);
+        }
+      } else {
+        applyTemplate('jpop', true);
+      }
+
+      document.getElementById('song-title').value = state.title || '';
+      document.getElementById('song-theme').value = state.theme || '';
+      selectMood(state.mood || 'emo', true);
+      selectVowel('a');
+      initKeywordCategories();
+      selectMoraHint(4);
+      renderBlocks();
+      updateSavedCount();
+      updateExportPreview();
+    }
+
+    function autoSaveCurrent() {
+      try {
+        localStorage.setItem(STORAGE_KEY_CURRENT, JSON.stringify(state));
+      } catch (e) {
+        console.warn('LocalStorage保存エラー:', e);
+      }
+      updateExportPreview();
+    }
+
+    // ==========================================
+    // 4. ブロック操作・構成テンプレート
+    // ==========================================
+    function createBlockObject(type, linesData = null) {
+      const defaultLines = linesData || [
+        { text: '', target: 8 },
+        { text: '', target: 8 },
+        { text: '', target: 8 },
+        { text: '', target: 8 }
+      ];
+      return {
+        id: 'blk_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        type: type,
+        lines: defaultLines
+      };
+    }
+
+    function applyTemplate(templateKey, silent = false) {
+      if (!silent && state.blocks.some(b => b.lines.some(l => l.text.trim() !== ''))) {
+        // 既存入力がある場合は末尾に追加するか確認の代わりに新規構成として置き換えつつトースト案内
+      }
+
+      if (templateKey === 'jpop') {
+        state.blocks = [
+          createBlockObject('Aメロ', [
+            { text: '', target: 8 }, { text: '', target: 8 }, { text: '', target: 8 }, { text: '', target: 8 }
+          ]),
+          createBlockObject('Bメロ', [
+            { text: '', target: 7 }, { text: '', target: 7 }, { text: '', target: 9 }
+          ]),
+          createBlockObject('サビ', [
+            { text: '', target: 8 }, { text: '', target: 8 }, { text: '', target: 8 }, { text: '', target: 9 }
+          ])
+        ];
+      } else if (templateKey === 'short') {
+        state.blocks = [
+          createBlockObject('サビ', [
+            { text: '', target: 8 }, { text: '', target: 8 }, { text: '', target: 8 }, { text: '', target: 8 }
+          ]),
+          createBlockObject('Aメロ', [
+            { text: '', target: 7 }, { text: '', target: 7 }
+          ]),
+          createBlockObject('大サビ', [
+            { text: '', target: 8 }, { text: '', target: 9 }
+          ])
+        ];
+      } else if (templateKey === 'ballad') {
+        state.blocks = [
+          createBlockObject('イントロ', [
+            { text: '', target: 8 }, { text: '', target: 8 }
+          ]),
+          createBlockObject('Aメロ', [
+            { text: '', target: 8 }, { text: '', target: 8 }, { text: '', target: 8 }, { text: '', target: 8 }
+          ]),
+          createBlockObject('Bメロ', [
+            { text: '', target: 7 }, { text: '', target: 8 }
+          ]),
+          createBlockObject('サビ', [
+            { text: '', target: 9 }, { text: '', target: 9 }, { text: '', target: 10 }, { text: '', target: 9 }
+          ]),
+          createBlockObject('アウトロ', [
+            { text: '', target: 7 }
+          ])
+        ];
+      }
+
+      if (state.blocks.length > 0) {
+        activeTarget = { blockId: state.blocks[0].id, lineIndex: 0, selectionStart: 0, selectionEnd: 0 };
+      }
+
+      renderBlocks();
+      autoSaveCurrent();
+      if (!silent) showToast('構成テンプレートをセットしました');
+    }
+
+    function addBlock(type) {
+      const newBlk = createBlockObject(type);
+      state.blocks.push(newBlk);
+      activeTarget = { blockId: newBlk.id, lineIndex: 0, selectionStart: 0, selectionEnd: 0 };
+      renderBlocks();
+      autoSaveCurrent();
+      showToast(`[${type}] ブロックを追加しました`);
+    }
+
+    function removeBlock(blockId) {
+      if (state.blocks.length <= 1) {
+        showToast('最低1つのブロックが必要です', 'warn');
+        return;
+      }
+      state.blocks = state.blocks.filter(b => b.id !== blockId);
+      renderBlocks();
+      autoSaveCurrent();
+    }
+
+    function moveBlock(blockId, direction) {
+      const idx = state.blocks.findIndex(b => b.id === blockId);
+      if (idx === -1) return;
+      const newIdx = idx + direction;
+      if (newIdx < 0 || newIdx >= state.blocks.length) return;
+      const temp = state.blocks[idx];
+      state.blocks[idx] = state.blocks[newIdx];
+      state.blocks[newIdx] = temp;
+      renderBlocks();
+      autoSaveCurrent();
+    }
+
+    function addLineToBlock(blockId) {
+      const blk = state.blocks.find(b => b.id === blockId);
+      if (!blk) return;
+      const lastTarget = blk.lines.length > 0 ? blk.lines[blk.lines.length - 1].target : 8;
+      blk.lines.push({ text: '', target: lastTarget });
+      activeTarget = { blockId: blockId, lineIndex: blk.lines.length - 1, selectionStart: 0, selectionEnd: 0 };
+      renderBlocks();
+      autoSaveCurrent();
+    }
+
+    function removeLineFromBlock(blockId, lineIndex) {
+      const blk = state.blocks.find(b => b.id === blockId);
+      if (!blk || blk.lines.length <= 1) return;
+      blk.lines.splice(lineIndex, 1);
+      renderBlocks();
+      autoSaveCurrent();
+    }
+
+    function applyGlobalTargetMora(val) {
+      if (!val) return;
+      const num = parseInt(val, 10);
+      state.blocks.forEach(blk => {
+        blk.lines.forEach(line => {
+          line.target = num;
+        });
+      });
+      renderBlocks();
+      autoSaveCurrent();
+      showToast(`全行の目標音数を「${num}音」に統一しました`);
+    }
+
+    // ==========================================
+    // 5. 歌詞ブロックUIの描画・リアルタイム音数判定
+    // ==========================================
+    function renderBlocks() {
+      const container = document.getElementById('blocks-container');
+      container.innerHTML = '';
+
+      let totalMora = 0;
+
+      state.blocks.forEach((blk, bIdx) => {
+        const isBlockActive = activeTarget.blockId === blk.id;
+        const isChorus = blk.type.includes('サビ');
+
+        const card = document.createElement('div');
+        card.className = `rounded-2xl bg-slate-900 border transition-all p-4 ${
+          isBlockActive ? 'active-block-ring' : 'border-slate-800 hover:border-slate-700'
+        }`;
+
+        // ブロックヘッダー
+        const headerHtml = `
+          <div class="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-800/80">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono text-slate-500">#${bIdx + 1}</span>
+              <select onchange="changeBlockType('${blk.id}', this.value)"
+                class="px-2.5 py-1 rounded-lg text-xs font-extrabold outline-none cursor-pointer ${
+                  isChorus
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                }">
+                ${['イントロ', 'Aメロ', 'Bメロ', 'サビ', 'Cメロ', '大サビ', 'アウトロ']
+                  .map(t => `<option value="${t}" ${blk.type === t ? 'selected' : ''} class="bg-slate-900 text-white">[${t}]</option>`)
+                  .join('')}
+              </select>
+            </div>
+            <div class="flex items-center gap-1">
+              <button onclick="moveBlock('${blk.id}', -1)" title="上へ移動" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">↑</button>
+              <button onclick="moveBlock('${blk.id}', 1)" title="下へ移動" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">↓</button>
+              <button onclick="removeBlock('${blk.id}')" title="ブロック削除" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 text-xs ml-1">🗑️</button>
+            </div>
+          </div>
+        `;
+
+        // 各行の入力フィールド＋リアルタイム音数バッジ
+        let linesHtml = '<div class="flex flex-col gap-2.5">';
+        blk.lines.forEach((line, lIdx) => {
+          const currentMora = countMora(line.text);
+          totalMora += currentMora;
+          const badgeInfo = getMoraBadgeHtml(currentMora, line.target);
+
+          linesHtml += `
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] font-mono text-slate-500 w-4 text-right">${lIdx + 1}</span>
+                <input
+                  id="input_${blk.id}_${lIdx}"
+                  type="text"
+                  value="${escapeHtml(line.text)}"
+                  placeholder="ここに歌詞を入力（目標 ${line.target}音）..."
+                  onfocus="setActiveTarget('${blk.id}', ${lIdx}, this)"
+                  onclick="setActiveTarget('${blk.id}', ${lIdx}, this)"
+                  onkeyup="setActiveTarget('${blk.id}', ${lIdx}, this)"
+                  oninput="handleLineInput('${blk.id}', ${lIdx}, this)"
+                  class="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 focus:border-cyan-400 text-sm text-white placeholder-slate-600 outline-none transition"
+                >
+                <!-- 目標音数セレクタ -->
+                <select onchange="handleLineTargetChange('${blk.id}', ${lIdx}, this.value)" title="目標音数"
+                  class="px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-semibold text-slate-300 outline-none">
+                  ${[5,6,7,8,9,10,11,12,14,16].map(n => `<option value="${n}" ${line.target == n ? 'selected' : ''}>目標${n}音</option>`).join('')}
+                </select>
+                ${blk.lines.length > 1 ? `
+                  <button onclick="removeLineFromBlock('${blk.id}', ${lIdx})" title="行を削除" class="text-slate-600 hover:text-rose-400 text-xs px-1">✕</button>
+                ` : ''}
+              </div>
+              <!-- 音数ステータスバー -->
+              <div class="pl-6 flex items-center justify-between text-[11px]">
+                <div id="badge_${blk.id}_${lIdx}">${badgeInfo}</div>
+              </div>
+            </div>
+          `;
+        });
+        linesHtml += '</div>';
+
+        // 行追加ボタン
+        const footerHtml = `
+          <div class="mt-3 pt-2 flex justify-start">
+            <button onclick="addLineToBlock('${blk.id}')" class="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 py-1 px-2 rounded-lg hover:bg-cyan-500/10 transition">
+              <span>＋ 行を追加</span>
+            </button>
+          </div>
+        `;
+
+        card.innerHTML = headerHtml + linesHtml + footerHtml;
+        container.appendChild(card);
+      });
+
+      // 全体統計更新
+      document.getElementById('total-stats-badge').textContent = `総ブロック: ${state.blocks.length} / 総音数: ${totalMora}音`;
+      updateActiveTargetIndicator();
+    }
+
+    function getMoraBadgeHtml(current, target) {
+      const diff = current - target;
+      if (current === 0) {
+        return `<span class="text-slate-500">目標 ${target}音 / 現在 0音</span>`;
+      }
+      if (diff === 0) {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">✨ 目標${target}音 / 現在${current}音 ピッタリ！</span>`;
+      } else if (diff > 0) {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">⚠️ 目標${target}音 / 現在${current}音（+${diff}音 オーバー）</span>`;
+      } else {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30">📏 目標${target}音 / 現在${current}音（あと${Math.abs(diff)}音）</span>`;
+      }
+    }
+
+    function handleLineInput(blockId, lineIndex, inputEl) {
+      const blk = state.blocks.find(b => b.id === blockId);
+      if (!blk) return;
+      blk.lines[lineIndex].text = inputEl.value;
+      setActiveTarget(blockId, lineIndex, inputEl);
+
+      // 該当行のバッジだけ高速更新（フォーカス維持）
+      const currentMora = countMora(inputEl.value);
+      const badgeEl = document.getElementById(`badge_${blockId}_${lineIndex}`);
+      if (badgeEl) {
+        badgeEl.innerHTML = getMoraBadgeHtml(currentMora, blk.lines[lineIndex].target);
+      }
+
+      // 全体総音数更新
+      let totalMora = 0;
+      state.blocks.forEach(b => b.lines.forEach(l => totalMora += countMora(l.text)));
+      document.getElementById('total-stats-badge').textContent = `総ブロック: ${state.blocks.length} / 総音数: ${totalMora}音`;
+
+      autoSaveCurrent();
+    }
+
+    function handleLineTargetChange(blockId, lineIndex, newTarget) {
+      const blk = state.blocks.find(b => b.id === blockId);
+      if (!blk) return;
+      blk.lines[lineIndex].target = parseInt(newTarget, 10);
+      renderBlocks();
+      autoSaveCurrent();
+    }
+
+    function changeBlockType(blockId, newType) {
+      const blk = state.blocks.find(b => b.id === blockId);
+      if (!blk) return;
+      blk.type = newType;
+      renderBlocks();
+      autoSaveCurrent();
+    }
+
+    function setActiveTarget(blockId, lineIndex, inputEl) {
+      activeTarget = {
+        blockId: blockId,
+        lineIndex: lineIndex,
+        selectionStart: inputEl ? inputEl.selectionStart : null,
+        selectionEnd: inputEl ? inputEl.selectionEnd : null
+      };
+      updateActiveTargetIndicator();
+    }
+
+    function updateActiveTargetIndicator() {
+      const blk = state.blocks.find(b => b.id === activeTarget.blockId);
+      const indicator = document.getElementById('active-target-indicator');
+      if (blk && indicator) {
+        indicator.textContent = `挿入先: [${blk.type}] ${activeTarget.lineIndex + 1}行目`;
+      }
+    }
+
+    // ==========================================
+    // 6. 作詞アイデア引き出しツール（ワンタップ挿入）
+    // ==========================================
+    function insertWordToEditor(word) {
+      // 括弧内の読み仮名を除去（例: "翼 (つばさ)" -> "翼"）
+      const cleanWord = word.replace(/\s*\([^)]*\)/g, '').trim();
+
+      let blk = state.blocks.find(b => b.id === activeTarget.blockId);
+      if (!blk && state.blocks.length > 0) {
+        blk = state.blocks[0];
+        activeTarget.blockId = blk.id;
+        activeTarget.lineIndex = 0;
+      }
+      if (!blk) return;
+
+      const lIdx = Math.min(activeTarget.lineIndex, blk.lines.length - 1);
+      const currentText = blk.lines[lIdx].text || '';
+      const start = activeTarget.selectionStart !== null ? activeTarget.selectionStart : currentText.length;
+      const end = activeTarget.selectionEnd !== null ? activeTarget.selectionEnd : currentText.length;
+
+      const newText = currentText.substring(0, start) + cleanWord + currentText.substring(end);
+      blk.lines[lIdx].text = newText;
+
+      const nextCursorPos = start + cleanWord.length;
+      activeTarget.selectionStart = nextCursorPos;
+      activeTarget.selectionEnd = nextCursorPos;
+
+      renderBlocks();
+      autoSaveCurrent();
+
+      // スマホで引き出しタブを開いていた場合は挿入通知を出す
+      showToast(`「${cleanWord}」を挿入しました`);
+
+      // PC等では該当インプットにフォーカスを戻す
+      const inputEl = document.getElementById(`input_${blk.id}_${lIdx}`);
+      if (inputEl && window.innerWidth >= 1024) {
+        inputEl.focus();
+        inputEl.setSelectionRange(nextCursorPos, nextCursorPos);
+      }
+    }
+
+    function switchToolTab(tabName) {
+      ['rhyme', 'gacha', 'mora'].forEach(t => {
+        const btn = document.getElementById(`tool-tab-${t}`);
+        const panel = document.getElementById(`tool-panel-${t}`);
+        if (t === tabName) {
+          btn.className = 'py-2 rounded-lg text-xs font-bold bg-indigo-600 text-white transition';
+          panel.classList.remove('hidden');
+          panel.classList.add('flex');
+        } else {
+          btn.className = 'py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition';
+          panel.classList.add('hidden');
+          panel.classList.remove('flex');
+        }
+      });
+    }
+
+    // 母音別ライム描画
+    function selectVowel(vowel) {
+      document.querySelectorAll('.vowel-btn').forEach(btn => {
+        if (btn.dataset.vowel === vowel) {
+          btn.className = 'vowel-btn flex-1 py-1.5 rounded-lg text-xs font-extrabold bg-cyan-500 text-slate-950 transition';
+        } else {
+          btn.className = 'vowel-btn flex-1 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
+        }
+      });
+
+      const grid = document.getElementById('vowel-words-grid');
+      const words = VOWEL_WORDS[vowel] || [];
+      grid.innerHTML = words.map(w => `
+        <button onclick="insertWordToEditor('${w}')"
+          class="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-300 border border-slate-700/80 text-xs font-medium transition active:scale-95">
+          ${w}
+        </button>
+      `).join('');
+    }
+
+    // 同義語パレット初期化
+    function initKeywordCategories() {
+      const catContainer = document.getElementById('keyword-category-btns');
+      const keys = Object.keys(KEYWORD_SYNONYMS);
+      catContainer.innerHTML = keys.map((k, idx) => `
+        <button onclick="selectKeywordCategory('${k}')" data-kwcat="${k}"
+          class="kwcat-btn px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+            idx === 0 ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+          }">
+          ${k}
+        </button>
+      `).join('');
+      selectKeywordCategory(keys[0]);
+    }
+
+    function selectKeywordCategory(catKey) {
+      document.querySelectorAll('.kwcat-btn').forEach(btn => {
+        if (btn.dataset.kwcat === catKey) {
+          btn.className = 'kwcat-btn px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-500 text-white transition';
+        } else {
+          btn.className = 'kwcat-btn px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-400 hover:text-white transition';
+        }
+      });
+
+      const box = document.getElementById('keyword-synonyms-box');
+      const words = KEYWORD_SYNONYMS[catKey] || [];
+      box.innerHTML = words.map(w => `
+        <button onclick="insertWordToEditor('${w}')"
+          class="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-indigo-500/25 text-indigo-200 border border-indigo-500/30 text-xs font-medium transition active:scale-95">
+          ${w}
+        </button>
+      `).join('');
+    }
+
+    // 情景フレーズガチャ
+    function shuffleGachaPhrases() {
+      const moodData = MOOD_CONFIG[state.mood] || MOOD_CONFIG.emo;
+      const pickRandom = (arr) => {
+        const list = Array.isArray(arr) ? arr : Object.values(arr);
+        return list[Math.floor(Math.random() * list.length)];
+      };
+
+      const scenePhrase = pickRandom(moodData.gacha.scene);
+      const emotionPhrase = pickRandom(moodData.gacha.emotion);
+      const metaphorPhrase = pickRandom(moodData.gacha.metaphor);
+
+      const container = document.getElementById('gacha-results');
+      const items = [
+        { tag: '🌃 情景描写', color: 'cyan', text: scenePhrase },
+        { tag: '💓 感情表現', color: 'indigo', text: emotionPhrase },
+        { tag: '🔮 比喩・メタファー', color: 'emerald', text: metaphorPhrase }
+      ];
+
+      container.innerHTML = items.map(item => `
+        <div onclick="insertWordToEditor('${item.text}')"
+          class="group cursor-pointer p-3 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 hover:border-cyan-500/50 transition flex flex-col gap-1">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold text-${item.color}-400">${item.tag}（${countMora(item.text)}音）</span>
+            <span class="text-[11px] text-slate-500 group-hover:text-cyan-300 font-semibold">＋ タップで挿入</span>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">${item.text}</p>
+        </div>
+      `).join('');
+    }
+
+    // 音数別ヒント
+    function selectMoraHint(moraNum) {
+      document.querySelectorAll('.mora-hint-btn').forEach(btn => {
+        if (parseInt(btn.dataset.mora, 10) === moraNum) {
+          btn.className = 'mora-hint-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-500 text-slate-950 transition';
+        } else {
+          btn.className = 'mora-hint-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition';
+        }
+      });
+
+      const box = document.getElementById('mora-phrases-box');
+      const list = MORA_PHRASES[moraNum] || [];
+      box.innerHTML = list.map(phrase => `
+        <button onclick="insertWordToEditor('${phrase}')"
+          class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-cyan-500/20 text-slate-200 hover:text-cyan-300 border border-slate-700 text-xs font-semibold transition active:scale-95">
+          ${phrase} <span class="text-[10px] text-cyan-400 ml-1">(${countMora(phrase)}音)</span>
+        </button>
+      `).join('');
+    }
+
+    // ==========================================
+    // 7. ムード選択 ＆ Suno / Udio 連携出力
+    // ==========================================
+    function handleMetaChange() {
+      state.title = document.getElementById('song-title').value;
+      state.theme = document.getElementById('song-theme').value;
+      autoSaveCurrent();
+    }
+
+    function selectMood(moodKey, skipSave = false) {
+      state.mood = moodKey;
+      document.querySelectorAll('.mood-btn').forEach(btn => {
+        if (btn.dataset.mood === moodKey) {
+          btn.className = 'mood-btn p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 bg-cyan-500/15 border-cyan-400 text-white shadow-md shadow-cyan-500/10';
+        } else {
+          btn.className = 'mood-btn p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600';
+        }
+      });
+
+      const moodObj = MOOD_CONFIG[moodKey] || MOOD_CONFIG.emo;
+      document.getElementById('gacha-mood-label').textContent = moodObj.label;
+      document.getElementById('style-prompt-display').textContent = moodObj.stylePrompt;
+
+      shuffleGachaPhrases();
+      if (!skipSave) autoSaveCurrent();
+      else updateExportPreview();
+    }
+
+    function buildFormattedLyrics() {
+      const useEnglish = document.getElementById('auto-english-tags').checked;
+      let outputLines = [];
+
+      state.blocks.forEach(blk => {
+        const tag = useEnglish ? (SECTION_TO_ENGLISH[blk.type] || `[${blk.type}]`) : `[${blk.type}]`;
+        outputLines.push(tag);
+        blk.lines.forEach(line => {
+          if (line.text.trim() !== '') {
+            outputLines.push(line.text.trim());
+          }
+        });
+        outputLines.push('');
+      });
+
+      return outputLines.join('\n').trim();
+    }
+
+    function updateExportPreview() {
+      const lyricsText = buildFormattedLyrics();
+      document.getElementById('export-preview-text').value = lyricsText || '（ここに歌詞を入力すると、Suno / Udio用のタグ付き歌詞が自動整形されます）';
+    }
+
+    function copyTextToClipboard(text, successMessage) {
+      // iFrame環境でも確実に動作する execCommand('copy') 方式を使用
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        showToast(successMessage);
+      } catch (err) {
+        showToast('コピーに失敗しました', 'warn');
+      }
+      document.body.removeChild(textarea);
+    }
+
+    function copyStylePrompt() {
+      const styleText = document.getElementById('style-prompt-display').textContent;
+      copyTextToClipboard(styleText, 'Suno/Udio用スタイルプロンプトをコピーしました！');
+    }
+
+    function copySunoFull() {
+      const lyrics = buildFormattedLyrics();
+      if (!lyrics) {
+        showToast('先に歌詞を入力してください', 'warn');
+        return;
+      }
+      copyTextToClipboard(lyrics, 'AI音楽生成用のタグ付き歌詞をコピーしました！');
+    }
+
+    function downloadTxtFile() {
+      const title = (state.title || '無題の楽曲').trim();
+      const theme = (state.theme || '未設定').trim();
+      const moodObj = MOOD_CONFIG[state.mood] || MOOD_CONFIG.emo;
+      const lyrics = buildFormattedLyrics();
+
+      const fileContent = [
+        `タイトル: ${title}`,
+        `テーマ: ${theme}`,
+        `ムード: ${moodObj.label}`,
+        `Style Prompt: ${moodObj.stylePrompt}`,
+        `----------------------------------------`,
+        ``,
+        lyrics
+      ].join('\n');
+
+      const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title}_歌詞.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`「${title}_歌詞.txt」を保存しました`);
+    }
+
+    // ==========================================
+    // 8. 複数曲ストック保存・読み込み（LocalStorage）
+    // ==========================================
+    function getSavedStocks() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY_STOCKS) || '[]');
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function updateSavedCount() {
+      const stocks = getSavedStocks();
+      document.getElementById('saved-count').textContent = stocks.length;
+    }
+
+    function saveCurrentSong() {
+      const stocks = getSavedStocks();
+      const title = (state.title || '').trim() || `無題の曲 (${new Date().toLocaleDateString('ja-JP')})`;
+      state.title = title;
+      document.getElementById('song-title').value = title;
+
+      const record = {
+        ...JSON.parse(JSON.stringify(state)),
+        updatedAt: new Date().toLocaleString('ja-JP')
+      };
+
+      const existingIdx = stocks.findIndex(s => s.id === state.id);
+      if (existingIdx !== -1) {
+        stocks[existingIdx] = record;
+      } else {
+        stocks.unshift(record);
+      }
+
+      localStorage.setItem(STORAGE_KEY_STOCKS, JSON.stringify(stocks));
+      updateSavedCount();
+      autoSaveCurrent();
+      showToast(`「${title}」をストックに保存しました`);
+    }
+
+    function toggleStockModal() {
+      const modal = document.getElementById('stock-modal');
+      const isHidden = modal.classList.contains('hidden');
+      if (isHidden) {
+        renderStockList();
+        modal.classList.remove('hidden');
+      } else {
+        modal.classList.add('hidden');
+      }
+    }
+
+    function toggleChangelogModal() {
+      const modal = document.getElementById('changelog-modal');
+      if (!modal) return;
+      modal.classList.toggle('hidden');
+    }
+
+    function renderStockList() {
+      const container = document.getElementById('stock-list-container');
+      const stocks = getSavedStocks();
+
+      if (stocks.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-slate-400 text-sm">
+            まだ保存された曲はありません。<br>ヘッダーの「💾 保存ストック」から現在の歌詞を保存できます。
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = stocks.map(item => {
+        const moodLabel = (MOOD_CONFIG[item.mood] || MOOD_CONFIG.emo).label;
+        return `
+          <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-bold text-white truncate">${escapeHtml(item.title)}</span>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shrink-0">${moodLabel}</span>
+              </div>
+              <p class="text-xs text-slate-400 truncate">テーマ: ${escapeHtml(item.theme || 'なし')} / 更新: ${item.updatedAt}</p>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="loadSongFromStock('${item.id}')" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold">開く</button>
+              <button onclick="deleteSongFromStock('${item.id}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 text-xs">削除</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function loadSongFromStock(songId) {
+      const stocks = getSavedStocks();
+      const target = stocks.find(s => s.id === songId);
+      if (!target) return;
+
+      state = JSON.parse(JSON.stringify(target));
+      document.getElementById('song-title').value = state.title || '';
+      document.getElementById('song-theme').value = state.theme || '';
+      selectMood(state.mood || 'emo', true);
+      renderBlocks();
+      autoSaveCurrent();
+      toggleStockModal();
+      showToast(`「${state.title}」を読み込みました`);
+    }
+
+    function deleteSongFromStock(songId) {
+      let stocks = getSavedStocks();
+      stocks = stocks.filter(s => s.id !== songId);
+      localStorage.setItem(STORAGE_KEY_STOCKS, JSON.stringify(stocks));
+      updateSavedCount();
+      renderStockList();
+      showToast('保存データから削除しました');
+    }
+
+    function createNewSong() {
+      state = {
+        id: Date.now().toString(),
+        title: '',
+        theme: '',
+        mood: 'emo',
+        blocks: []
+      };
+      document.getElementById('song-title').value = '';
+      document.getElementById('song-theme').value = '';
+      selectMood('emo', true);
+      applyTemplate('jpop', true);
+      showToast('新しい白紙のプロジェクトを作成しました');
+    }
+
+    // ==========================================
+    // 9. スマホ表示切替 ＆ ユーティリティ
+    // ==========================================
+    function switchMobileView(view) {
+      const editorSec = document.getElementById('section-editor');
+      const toolsSec = document.getElementById('section-tools');
+      const exportSec = document.getElementById('section-export');
+
+      const tabs = {
+        editor: document.getElementById('mobile-tab-editor'),
+        tools: document.getElementById('mobile-tab-tools'),
+        export: document.getElementById('mobile-tab-export')
+      };
+
+      Object.keys(tabs).forEach(k => {
+        if (k === view) {
+          tabs[k].className = 'flex-1 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow';
+        } else {
+          tabs[k].className = 'flex-1 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700';
+        }
+      });
+
+      if (window.innerWidth < 1024) {
+        editorSec.classList.toggle('hidden', view !== 'editor');
+        toolsSec.classList.toggle('hidden', view !== 'tools');
+        exportSec.classList.toggle('hidden', view !== 'export');
+      }
+    }
+
+    // 画面リサイズ時の表示整合性確保
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 1024) {
+        document.getElementById('section-editor').classList.remove('hidden');
+        document.getElementById('section-tools').classList.remove('hidden');
+        document.getElementById('section-export').classList.remove('hidden');
+      } else {
+        switchMobileView('editor');
+      }
+    });
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const colorClass = type === 'warn'
+        ? 'bg-rose-950/95 border-rose-500/50 text-rose-200'
+        : 'bg-slate-900/95 border-cyan-500/50 text-cyan-200';
+
+      toast.className = `px-4 py-2.5 rounded-xl border shadow-xl text-xs font-bold backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0 ${colorClass}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 2600);
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // 起動実行
+    window.addEventListener('DOMContentLoaded', () => {
+      initApp();
+      if (window.innerWidth < 1024) {
+        switchMobileView('editor');
+      }
+    });
+  </script>
+</body>
+</html>
